@@ -106,7 +106,6 @@ NODE_MODULES_CACHEDIR=modules_tar_cachedir
 # tv
 GAIA_DEVICE_TYPE?=phone
 
-TEST_AGENT_PORT?=8789
 GAIA_APP_TARGET?=engineering
 
 # Enable compatibility to run in Firefox Desktop
@@ -150,8 +149,6 @@ else ifeq ($(DESKTOP),1)
 NOFTU=1
 NOFTUPING=1
 PROFILE_FOLDER?=profile-debug
-else ifeq ($(MAKECMDGOALS),test-integration)
-PROFILE_FOLDER?=profile-test
 endif
 
 ifeq ($(NOFTUPING), 0)
@@ -175,9 +172,7 @@ SYSTEM?=$(SCHEME)system.$(GAIA_DOMAIN)
 
 BUILD_APP_NAME?=*
 ifneq ($(APP),)
-ifneq ($(MAKECMDGOALS), test-integration)
 BUILD_APP_NAME=$(APP)
-endif
 endif
 
 # BUILDAPP variable defines the target b2g platform (eg desktop, device)
@@ -190,8 +185,6 @@ ifneq ($(BUILDAPP),desktop)
 REPORTER?=mocha-tbpl-reporter
 endif
 REPORTER?=spec
-MARIONETTE_RUNNER_HOST?=marionette-b2gdesktop-host
-TEST_MANIFEST?=$(shell pwd)/shared/test/integration/local-manifest.json
 
 ifeq ($(MAKECMDGOALS), demo)
 GAIA_DOMAIN=thisdomaindoesnotexist.org
@@ -430,7 +423,7 @@ GAIA_APP_CONFIG := /tmp/gaia-apps-temp.list
 $(warning GAIA_APP_SRCDIRS is deprecated, please use GAIA_APP_CONFIG)
 endif
 
-GAIA_ALLAPPDIRS=$(shell find -L $(GAIA_DIR)$(SEP)apps $(GAIA_DIR)$(SEP)dev_apps $(GAIA_DIR)$(SEP)tv_apps -maxdepth 1 -mindepth 1 -type d  | sed 's@[/\\]@$(SEP_FOR_SED)@g')
+GAIA_ALLAPPDIRS=$(shell find -L $(GAIA_DIR)$(SEP)apps -maxdepth 1 -mindepth 1 -type d  | sed 's@[/\\]@$(SEP_FOR_SED)@g')
 
 GAIA_APPDIRS?=$(shell $(call run-js-command,scan-appdir, \
 		GAIA_APP_CONFIG="$(GAIA_APP_CONFIG)" \
@@ -479,34 +472,6 @@ SED_INPLACE_NO_SUFFIX = sed -i
 DOWNLOAD_CMD = wget $(WGET_OPTS)
 TAR_WILDCARDS = tar --wildcards
 endif
-
-# Test agent setup
-TEST_COMMON=dev_apps/test-agent/common
-ifeq ($(strip $(NODEJS)),)
-  NODEJS := $(shell which node)
-endif
-ifeq ($(strip $(NODEJS)),)
-  NODEJS := $(shell which nodejs)
-endif
-
-ifeq ($(strip $(NPM)),)
-  NPM := $(shell which npm)
-endif
-
-TEST_AGENT_CONFIG="./dev_apps/test-agent/config.json"
-TEST_AGENT_COVERAGE="./build/config/test-agent-coverage.json"
-
-#Marionette testing variables
-#make sure we're python 2.7.x
-ifeq ($(strip $(PYTHON_27)),)
-PYTHON_27 := $(shell which python)
-endif
-PYTHON_FULL := $(wordlist 2,4,$(subst ., ,$(shell $(PYTHON_27) --version 2>&1)))
-PYTHON_MAJOR := $(word 1,$(PYTHON_FULL))
-PYTHON_MINOR := $(word 2,$(PYTHON_FULL))
-MARIONETTE_HOST ?= localhost
-MARIONETTE_PORT ?= 2828
-TEST_DIRS ?= $(GAIA_DIR)/tests
 
 PROFILE_DIR?=$(GAIA_DIR)$(SEP)$(PROFILE_FOLDER)
 COREWEBAPPS_DIR?=$(PROFILE_DIR)
@@ -581,7 +546,7 @@ endef
 export BUILD_CONFIG
 
 # Generate profile/
-$(PROFILE_FOLDER): profile-dir build-app test-agent-config contacts extensions b2g_sdk .git/hooks/pre-commit
+$(PROFILE_FOLDER): profile-dir build-app contacts extensions b2g_sdk .git/hooks/pre-commit
 	@echo "[DEBUG_LOG]: LD_LIBRARY_PATH=$(LD_LIBRARY_PATH)"
 ifeq ($(BUILD_APP_NAME),*)
 	@echo "Profile Ready: please run [b2g|firefox] -profile $(CURDIR)$(SEP)$(PROFILE_FOLDER)"
@@ -646,31 +611,6 @@ endif
 
 # Create webapps
 offline: app
-
-# Create an empty reference workload
-.PHONY: reference-workload-empty
-reference-workload-empty:
-	test_media/reference-workload/makeReferenceWorkload.sh empty
-
-# Create a light reference workload
-.PHONY: reference-workload-light
-reference-workload-light:
-	test_media/reference-workload/makeReferenceWorkload.sh light
-
-# Create a medium reference workload
-.PHONY: reference-workload-medium
-reference-workload-medium:
-	test_media/reference-workload/makeReferenceWorkload.sh medium
-
-# Create a heavy reference workload
-.PHONY: reference-workload-heavy
-reference-workload-heavy:
-	test_media/reference-workload/makeReferenceWorkload.sh heavy
-
-# Create an extra heavy reference workload
-.PHONY: reference-workload-x-heavy
-reference-workload-x-heavy:
-	test_media/reference-workload/makeReferenceWorkload.sh x-heavy
 
 .PHONY: xpcshell_sdk xulrunner_sdk print-xulrunner-sdk
 xpcshell_sdk:
@@ -789,167 +729,6 @@ endif
 	$(NPM) run refresh
 
 ###############################################################################
-# Tests                                                                       #
-###############################################################################
-
-MOZ_TESTS = "$(MOZ_OBJDIR)/_tests/testing/mochitest"
-INJECTED_GAIA = "$(MOZ_TESTS)/browser/gaia"
-
-TEST_PATH=gaia/tests/${TEST_FILE}
-
-ifndef APPS
-  ifdef APP
-    APPS=$(APP)
-  else
-    APPS=template $(shell find apps -type d -name 'test' | sed -e 's|^apps/||' -e 's|/test$$||' | sort )
-  endif
-endif
-
-mulet: node_modules
-	DEBUG=* ./node_modules/.bin/mozilla-download \
-	--product mulet \
-	--branch mozilla-central \
-	$(shell pwd)
-	touch -c $@
-
-.PHONY: test-integration
-# $(PROFILE_FOLDER) should be `profile-test` when we do `make test-integration`.
-test-integration: clean $(PROFILE_FOLDER) test-integration-test
-
-# XXX Because bug-969215 is not finished, if we are going to run too many
-# marionette tests for 30 times at the same time, we may easily get timeout.
-#
-# In this way, we decide to separate building process with running marionette
-# tests so that we won't get into this problem.
-#
-# Remember to remove this target after bug-969215 is finished !
-.PHONY: test-integration-test
-test-integration-test: mulet node_modules
-	TEST_MANIFEST=$(TEST_MANIFEST) $(NPM) run marionette -- --buildapp="$(BUILDAPP)" --reporter="$(REPORTER)"
-
-.PHONY: jsmarionette-unit-tests
-jsmarionette-unit-tests: mulet node_modules $(PROFILE_FOLDER) tests/jsmarionette/runner/marionette-js-runner/venv
-	PROFILE_FOLDER=$(PROFILE_FOLDER) ./tests/jsmarionette/run_tests.js
-
-tests/jsmarionette/runner/marionette-js-runner/venv:
-	# Install virtualenv
-	cd tests/jsmarionette/runner/marionette-js-runner && $(NPM) install
-	# Still want to use $GAIA/node_modules
-	rm -rf tests/jsmarionette/runner/marionette-js-runner/node_modules
-
-
-.PHONY: caldav-server-install
-caldav-server-install:
-	source tests/ci/venv.sh; \
-				export LC_ALL=en_US.UTF-8; \
-				export LANG=en_US.UTF-8; \
-				pip install radicale;
-
-.PHONY: raptor
-raptor: node_modules
-	RAPTOR=1 PERF_LOGGING=1 DEVICE_DEBUG=1 GAIA_OPTIMIZE=1 NOFTU=1 SCREEN_TIMEOUT=0 make reset-gaia
-
-.PHONY: raptor-transformer
-raptor-transformer: node_modules
-ifeq ($(RAPTOR_TRANSFORM_RULES),)
-	@(echo "Please ensure you specify the 'RAPTOR_TRANSFORM_RULES=<directory with the *.esp files>'" && exit 1)
-endif
-	@test -d $(RAPTOR_TRANSFORM_RULES) || (echo "Please ensure the '$(RAPTOR_TRANSFORM_RULES)' directory exists" && exit 1)
-	RAPTOR_TRANSFORM=1 RAPTOR=1 PERF_LOGGING=1 DEVICE_DEBUG=1 GAIA_OPTIMIZE=1 NOFTU=1 SCREEN_TIMEOUT=0 make reset-gaia
-
-.PHONY: tests
-tests: app offline
-	echo "Checking if the mozilla build has tests enabled..."
-	test -d $(MOZ_TESTS) || (echo "Please ensure you don't have |ac_add_options --disable-tests| in your mozconfig." && exit 1)
-	echo "Checking the injected Gaia..."
-	test -L $(INJECTED_GAIA) || ln -s $(CURDIR) $(INJECTED_GAIA)
-	TEST_PATH=$(TEST_PATH) make -C $(MOZ_OBJDIR) mochitest-browser-chrome EXTRA_TEST_ARGS="--browser-arg=\"\" --extra-profile-file=$(CURDIR)/$(PROFILE_FOLDER)/webapps --extra-profile-file=$(CURDIR)/$(PROFILE_FOLDER)/user.js"
-
-.PHONY: common-install
-common-install:
-	@test -x "$(NODEJS)" || (echo "Please Install NodeJS -- (use aptitude on linux or homebrew on osx)" && exit 1 )
-	@test -x "$(NPM)" || (echo "Please install NPM (node package manager) -- http://npmjs.org/" && exit 1 )
-
-.PHONY: update-common
-update-common: common-install
-	# common testing tools
-	mkdir -p $(TEST_COMMON)/vendor/test-agent/
-	rm -f $(TEST_COMMON)/vendor/test-agent/test-agent.js
-	rm -f $(TEST_COMMON)/vendor/test-agent/test-agent.css
-	cp node_modules/test-agent/test-agent.js $(TEST_COMMON)/vendor/test-agent/
-	cp node_modules/test-agent/test-agent.css $(TEST_COMMON)/vendor/test-agent/
-
-# Create the json config file
-# for use with the test agent GUI
-test-agent-config:
-ifeq ($(BUILD_APP_NAME),*)
-	@rm -f $(TEST_AGENT_CONFIG)
-	@touch $(TEST_AGENT_CONFIG)
-	@rm -f /tmp/test-agent-config;
-	@# Build json array of all test files
-	@for d in ${GAIA_ALLAPPDIRS}; \
-	do \
-		parent="`dirname $$d`"; \
-		pathlen=`expr $${#parent} + 2`; \
-		find -L "$$d" -name '*_test.js' -path '*/test/unit/*' | awk '{print substr($$0,'$${pathlen}')}' >> /tmp/test-agent-config; \
-	done;
-	@echo '{"tests": [' >> $(TEST_AGENT_CONFIG)
-	@cat /tmp/test-agent-config |  \
-		sed 's:\(.*\):"\1":' | \
-		sed -e ':a' -e 'N' -e '$$!ba' -e 's/\n/,\
-	/g' >> $(TEST_AGENT_CONFIG);
-	@echo '  ]}' >> $(TEST_AGENT_CONFIG);
-	@echo "Finished: test ui config file: $(TEST_AGENT_CONFIG)"
-	@rm -f /tmp/test-agent-config
-endif
-
-# For test coverage report
-COVERAGE?=0
-ifeq ($(COVERAGE), 1)
-TEST_ARGS=--coverage
-endif
-# Temp make file method until we can switch
-# over everything in test
-ifneq ($(strip $(APP)),)
-APP_TEST_LIST=$(shell find -L $(GAIA_DIR)$(SEP)apps$(SEP)$(APP) $(GAIA_DIR)$(SEP)dev_apps$(SEP)$(APP) $(GAIA_DIR)$(SEP)tv_apps$(SEP)$(APP) -name '*_test.js' 2> /dev/null | grep '/test/unit/')
-endif
-.PHONY: test-agent-test
-test-agent-test: node_modules
-ifneq ($(strip $(APP)),)
-	@echo 'Running tests for $(APP)';
-	./node_modules/test-agent/bin/js-test-agent test $(TEST_ARGS) --server ws://localhost:$(TEST_AGENT_PORT) -t "$(TEST_AGENT_COVERAGE)" -m "://([a-zA-Z-_]+)\." --reporter $(REPORTER) $(APP_TEST_LIST)
-else
-	@echo 'Running all tests';
-	./node_modules/test-agent/bin/js-test-agent test $(TEST_ARGS) --server ws://localhost:$(TEST_AGENT_PORT) -t "$(TEST_AGENT_COVERAGE)" -m "://([a-zA-Z-_]+)\." --reporter $(REPORTER)
-endif
-
-.PHONY: test-agent-server
-test-agent-server: common-install node_modules
-	./node_modules/test-agent/bin/js-test-agent server --port $(TEST_AGENT_PORT) -c ./build/config/test-agent-server.js -t "$(TEST_AGENT_COVERAGE)" -m "://([a-zA-Z-_]+)\." --http-path . --growl
-
-.PHONY: marionette
-marionette:
-#need the profile
-	test -d $(GAIA)/$(PROFILE_FOLDER) || $(MAKE) $(PROFILE_FOLDER)
-ifneq ($(PYTHON_MAJOR), 2)
-	@echo "Python 2.7.x is needed for the marionette client. You can set the PYTHON_27 variable to your python2.7 path." && exit 1
-endif
-ifneq ($(PYTHON_MINOR), 7)
-	@echo "Python 2.7.x is needed for the marionette client. You can set the PYTHON_27 variable to your python2.7 path." && exit 1
-endif
-ifeq ($(strip $(MC_DIR)),)
-	@echo "Please have the MC_DIR environment variable point to the top of your mozilla-central tree." && exit 1
-endif
-#if B2G_BIN is defined, we will run the b2g binary, otherwise, we assume an instance is running
-ifneq ($(strip $(B2G_BIN)),)
-	cd $(MC_DIR)/testing/marionette/client/marionette && \
-	sh venv_test.sh $(PYTHON_27) --address=$(MARIONETTE_HOST):$(MARIONETTE_PORT) --b2gbin=$(B2G_BIN) $(TEST_DIRS)
-else
-	cd $(MC_DIR)/testing/marionette/client/marionette && \
-	sh venv_test.sh $(PYTHON_27) --address=$(MARIONETTE_HOST):$(MARIONETTE_PORT) $(TEST_DIRS)
-endif
-
-###############################################################################
 # Utils                                                                       #
 ###############################################################################
 
@@ -960,7 +739,7 @@ ifndef LINTED_FILES
 ifdef APP
   JSHINTED_PATH = apps/$(APP)
 else
-  JSHINTED_PATH = apps shared build tests tv_apps
+  JSHINTED_PATH = apps shared build
 endif
 endif
 
@@ -1032,31 +811,6 @@ install-gaia: $(PROFILE_FOLDER) push
 push: b2g_sdk
 	@$(call $(BUILD_RUNNER),push-to-device)
 
-# Copy demo media to the sdcard.
-# If we've got old style directories on the phone, rename them first.
-install-media-samples:
-	$(ADB) shell 'if test -d /sdcard/Pictures; then mv /sdcard/Pictures /sdcard/DCIM; fi'
-	$(ADB) shell 'if test -d /sdcard/music; then mv /sdcard/music /sdcard/music.temp; mv /sdcard/music.temp /sdcard/Music; fi'
-	$(ADB) shell 'if test -d /sdcard/videos; then mv /sdcard/videos /sdcard/Movies;	fi'
-
-	$(ADB) push test_media/samples/DCIM $(MSYS_FIX)/sdcard/DCIM
-	$(ADB) push test_media/samples/Movies $(MSYS_FIX)/sdcard/Movies
-	$(ADB) push test_media/samples/Music $(MSYS_FIX)/sdcard/Music
-
-install-test-media:
-	$(ADB) push test_media/Pictures $(MSYS_FIX)/sdcard/DCIM
-	$(ADB) push test_media/Movies $(MSYS_FIX)/sdcard/Movies
-	$(ADB) push test_media/Music $(MSYS_FIX)/sdcard/Music
-
-dialer-demo:
-	@cp -R apps/contacts apps/dialer
-	@rm apps/dialer/contacts/manifest*
-	@mv apps/dialer/contacts/index.html apps/dialer/contacts/contacts.html
-	@sed -i.bak 's/manifest.appcache/..\/manifest.appcache/g' apps/dialer/contacts/contacts.html
-	@find apps/dialer/ -name '*.bak' -exec rm {} \;
-
-demo: install-media-samples install-gaia
-
 production: reset-gaia
 dogfood: reset-gaia
 
@@ -1091,7 +845,7 @@ endif
 
 # clean out build products
 clean:
-	rm -rf profile profile-debug profile-test profile-gaia-test-b2g profile-gaia-test-firefox profile-raptor $(PROFILE_FOLDER) $(STAGE_DIR) docs minidumps
+	rm -rf profile profile-debug profile-raptor $(PROFILE_FOLDER) $(STAGE_DIR) docs minidumps
 
 # clean out build products and tools
 really-clean: clean
@@ -1100,19 +854,3 @@ really-clean: clean
 .git/hooks/pre-commit: tools/pre-commit
 	test -d .git && cp tools/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit || true
 
-build-test-unit: b2g_sdk $(NPM_INSTALLED_PROGRAMS)
-	@$(call $(BUILD_RUNNER),build-test,TEST_TYPE=unit REPORTER=$(REPORTER) TRY_ENV=$(TRY_ENV) TEST_FILES="$(TEST_FILES)")
-
-build-test-integration: b2g_sdk $(NPM_INSTALLED_PROGRAMS)
-	@$(call $(BUILD_RUNNER),build-test,TEST_TYPE=integration REPORTER=$(REPORTER) TRY_ENV=$(TRY_ENV) TEST_FILES="$(TEST_FILES)")
-
-build-test-unit-coverage: $(NPM_INSTALLED_PROGRAMS)
-	@$(call run-build-coverage,build/test/unit)
-
-.PHONY: docs
-docs: $(NPM_INSTALLED_PROGRAMS)
-	gulp docs
-
-.PHONY: watch
-watch: $(NPM_INSTALLED_PROGRAMS)
-	node build/watcher.js

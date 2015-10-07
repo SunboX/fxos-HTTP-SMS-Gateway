@@ -1,0 +1,12 @@
+{
+  "wifi": {
+    "enabled": true,
+    "network": "blacky_nomap",
+    "password": "SaltAndPepper101"
+  },
+  "cellular": {
+    "roaming": false,
+    "edgeOnly": false,
+    "pin": "0000"
+  }
+}
