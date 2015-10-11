@@ -84,25 +84,21 @@ window.addEventListener('ready', ev => {
                                         response.headers['Content-Length'] = lengthInUtf8Bytes(body);
                                         response.send(body);
                                     };
-
                                     break;
 
-                                    // Default error message
-                                    // TODO: better handling for invalid requests with more clear exception messages
+                                // Default error message
+                                // TODO: better handling for invalid requests with more clear exception messages
                                 default:
                                     body = '{"message":"Please use /send with GET parameters"}';
                                     response.headers['Content-Length'] = lengthInUtf8Bytes(body);
                                     response.send(body);
                             }
                         });
-
                         httpServer.start();
 
                         writeLine('HTTP Server running at: http://' + e.ipAddress + ':' + httpServer.port + '/');
-
                         writeLine('SMS gateway ready');
                     }
-
                     lastIp = e.ipAddress;
                 };
             }
