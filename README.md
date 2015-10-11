@@ -13,7 +13,7 @@ This gateway server was tested using a Firefox OS 2.5 device. But it should also
 
 Firefox OS is based on three parts, Gonk, Gecko and Gaia. Gonk contains the kernel, hardware abstraction layer and 
 several other low-level components. Gecko is the application platform layer running all JavaScript and rendering 
-stuff. Gaia is main thing that makes up Firefox OS. This gateway server replaces Gaia and with it's own code.
+stuff. Gaia is the main thing that makes up Firefox OS. This gateway server replaces Gaia and with it's own code.
 
 If the device get's power connection, it will instantly boot up. There's no way to shut it down (except removing 
 the power connection **and** the battery). So no one can by mistake shut the server off.
