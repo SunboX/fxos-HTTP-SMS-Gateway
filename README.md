@@ -1,5 +1,8 @@
 # HTTP-SMS-Gateway based on Firefox OS
 
+From [wikipedia.org](https://en.wikipedia.org/wiki/SMS_gateway):
+> An SMS gateway allows a computer to send or receive Short Message Service (SMS) transmissions to or from a telecommunications network.
+
 This is a fully functional HTTP-SMS-Gateway server that runs on any device supporting Firefox OS.
 The device will boot up straight into the server itself, it's not like a app running inside Firefox OS, 
 more like a custom operating system that is based on Firefox OS.
