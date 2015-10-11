@@ -74,18 +74,14 @@ window.addEventListener('ready', ev => {
 										writeLine('Message sent successfully');
 
 										body = '{"message":"Message sent successfully"}';
-
 										response.headers['Content-Length'] = lengthInUtf8Bytes(body);
-
 										response.send(body);
 									};
 									sendReq.onerror = function() {
 										writeLine('Could not send SMS: ' + sendReq.error);
 
 										body = '{"message":"Could not send SMS: ' + sendReq.error + '"}';
-
 										response.headers['Content-Length'] = lengthInUtf8Bytes(body);
-
 										response.send(body);
 									};
 
@@ -95,9 +91,7 @@ window.addEventListener('ready', ev => {
 								// TODO: better handling for invalid requests with more clear exception messages
 								default:
 									body = '{"message":"Please use /send with GET parameters"}';
-
 									response.headers['Content-Length'] = lengthInUtf8Bytes(body);
-
 									response.send(body);
 							}
 						});
