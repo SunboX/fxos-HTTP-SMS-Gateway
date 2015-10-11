@@ -52,6 +52,10 @@ in the root folder of the devices sd-card. The file has to contain a configurati
 
 * You can not use a aplha-numeric string as sender identification
 
+## Making changes
+
+The bootup logic that connects to your mobile carrier and wifi resitis in [`/apps/system/js/bootstrap.js`](https://github.com/SunboX/fxos-HTTP-SMS-Gateway/blob/master/apps/system/js/bootstrap.js). The main server logic that starts the web server, listens to incomming requests and sends SMS can be found in [`/apps/system/js/sms-gateway/gateway.js`](https://github.com/SunboX/fxos-HTTP-SMS-Gateway/blob/master/apps/system/js/sms-gateway/gateway.js).
+
 ## Thanks
 
 * To Jan Jongboom and it's [JanOS](http://janos.io/). This server's boot-up script is mainly based on the work by Jan
