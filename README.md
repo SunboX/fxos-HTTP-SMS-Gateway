@@ -44,7 +44,7 @@ in the root folder of the devices sd-card. The file has to contain a configurati
 1. Get a device running Firefox OS that has cellular connection
 3. Clone the Github project to your local computer
 4. Connect your device to your computer
-4. Run `make reset-phone` inside the cloned project folder to update the device
+4. Run `make reset-gaia` inside the cloned project folder to update the device
 5. Put a `settings.json` file on the devices sd-card
 6. When all is up and running, you can send messages trought the API using `http://YOUR_PHONES_IP:80/send?number=+49172000000&message=Hello%20World!`
 
